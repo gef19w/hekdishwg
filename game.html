@@ -1,0 +1,251 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>لعبة قيادة الطائرة</title>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.113/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.113/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+  <style>
+    html, body, #cesiumContainer {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: black;
+    }
+    #lostMessage {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 20px;
+      font-size: 24px;
+      display: none;
+      border-radius: 10px;
+      z-index: 10;
+    }
+    #lostMessage button {
+      margin-top: 10px;
+      padding: 10px;
+      font-size: 18px;
+    }
+    #mobileControls {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    #joystick {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      width: 120px;
+      height: 120px;
+      background: rgba(200, 200, 200, 0.3);
+      border-radius: 50%;
+      pointer-events: auto;
+      touch-action: none;
+    }
+    #stick {
+      width: 40px;
+      height: 40px;
+      background: rgba(100, 100, 255, 0.7);
+      border-radius: 50%;
+      position: relative;
+      left: 40px;
+      top: 40px;
+    }
+    #altitudeButtons {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: auto;
+    }
+    #altitudeButtons button,
+    #cameraBtn {
+      width: 50px;
+      height: 50px;
+      font-size: 24px;
+      border-radius: 50%;
+      border: none;
+      background: #4caf50;
+      color: white;
+      pointer-events: auto;
+      touch-action: manipulation;
+    }
+    #cameraBtn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <div id="lostMessage">
+    لقد تحطمت المروحية!<br>
+    <button onclick="restartGame()">إعادة المحاولة</button>
+  </div>
+  <div id="mobileControls" style="display: none;">
+    <div id="joystick"><div id="stick"></div></div>
+    <div id="altitudeButtons">
+      <button id="upBtn">🔼</button>
+      <button id="downBtn">🔽</button>
+    </div>
+    <button id="cameraBtn">📷</button>
+  </div>
+  <audio id="engineSound" src="assets/engine.mp3" autoplay loop></audio>
+  <script>
+    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzYWY5MWNlNi01ZTUyLTQxMjgtOThmYi03MDYxYzRjMGFlNWIiLCJpZCI6MzEzMTE4LCJpYXQiOjE3NTAxOTQ2NjN9.WjNOm9VnV1aLGHV9OnUGCQdLUfegmK_y9iWN5Sz6BF4';
+    const viewer = new Cesium.Viewer('cesiumContainer', {
+      terrainProvider: Cesium.createWorldTerrain(),
+      shouldAnimate: true
+    });
+    const scene = viewer.scene;
+    const engineSound = document.getElementById("engineSound");
+    const deviceType = localStorage.getItem("selectedDevice");
+    if (deviceType === 'mobile') {
+      document.getElementById('mobileControls').style.display = 'block';
+    }
+    let helicopterPosition = Cesium.Cartesian3.fromDegrees(2.3522, 48.8566, 120);
+    let model, movementInterval, lastPositionBeforeCrash = helicopterPosition;
+    let gameOver = false, cameraMode = 0;
+    Cesium.Model.fromGltfAsync({
+      url: 'assets/helicopter.glb',
+      modelMatrix: Cesium.Transforms.eastNorthUpToFixedFrame(helicopterPosition),
+      scale: 1.0
+    }).then(m => {
+      model = m;
+      scene.primitives.add(model);
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(2.3522, 48.8566, 300),
+        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-30), roll: 0 }
+      });
+    });
+    let joystick = document.getElementById('joystick'), stick = document.getElementById('stick');
+    let dx = 0, dy = 0, isTouching = false, centerX = 0, centerY = 0;
+    joystick?.addEventListener('touchstart', e => {
+      const rect = joystick.getBoundingClientRect();
+      centerX = rect.left + rect.width / 2;
+      centerY = rect.top + rect.height / 2;
+      isTouching = true;
+    });
+    joystick?.addEventListener('touchmove', e => {
+      if (!isTouching) return;
+      const touch = e.touches[0];
+      dx = touch.clientX - centerX;
+      dy = touch.clientY - centerY;
+      const max = 40, dist = Math.min(max, Math.sqrt(dx*dx + dy*dy));
+      const angle = Math.atan2(dy, dx);
+      stick.style.left = `${40 + dist * Math.cos(angle)}px`;
+      stick.style.top = `${40 + dist * Math.sin(angle)}px`;
+    });
+    joystick?.addEventListener('touchend', () => {
+      dx = 0; dy = 0;
+      stick.style.left = '40px';
+      stick.style.top = '40px';
+      isTouching = false;
+    });
+    document.getElementById('upBtn')?.addEventListener('touchstart', () => {
+      helicopterPosition = Cesium.Cartesian3.fromElements(helicopterPosition.x, helicopterPosition.y, helicopterPosition.z + 3);
+    });
+    document.getElementById('downBtn')?.addEventListener('touchstart', () => {
+      helicopterPosition = Cesium.Cartesian3.fromElements(helicopterPosition.x, helicopterPosition.y, helicopterPosition.z - 3);
+    });
+    document.getElementById('cameraBtn')?.addEventListener('click', () => {
+      cameraMode = (cameraMode + 1) % 4;
+    });
+    const keys = { arrowup: false, arrowdown: false, arrowleft: false, arrowright: false, w: false, s: false };
+    document.addEventListener('keydown', e => {
+      const k = e.key.toLowerCase();
+      if (keys.hasOwnProperty(k)) keys[k] = true;
+      if (k === 'c') cameraMode = (cameraMode + 1) % 4;
+    });
+    document.addEventListener('keyup', e => {
+      const k = e.key.toLowerCase();
+      if (keys.hasOwnProperty(k)) keys[k] = false;
+    });
+    function moveHelicopter() {
+      if (gameOver || !model) return;
+      lastPositionBeforeCrash = helicopterPosition;
+      let speed = 0.0005;
+      let cartographic = Cesium.Cartographic.fromCartesian(helicopterPosition);
+      if (deviceType === 'mobile' && (dx || dy)) {
+        const angle = Math.atan2(dy, dx);
+        const magnitude = Math.min(Math.sqrt(dx*dx + dy*dy) / 40, 1);
+        cartographic.longitude += Math.cos(angle) * speed * magnitude;
+        cartographic.latitude += Math.sin(angle) * speed * magnitude;
+        engineSound.volume = 0.8;
+      } else if (deviceType === 'desktop') {
+        let angle = null;
+        if (keys.arrowup && keys.arrowright) angle = Math.PI / 4;
+        else if (keys.arrowup && keys.arrowleft) angle = 3 * Math.PI / 4;
+        else if (keys.arrowdown && keys.arrowleft) angle = 5 * Math.PI / 4;
+        else if (keys.arrowdown && keys.arrowright) angle = 7 * Math.PI / 4;
+        else if (keys.arrowup) angle = 0;
+        else if (keys.arrowdown) angle = Math.PI;
+        else if (keys.arrowleft) angle = Math.PI / 2;
+        else if (keys.arrowright) angle = -Math.PI / 2;
+        if (angle !== null) {
+          cartographic.longitude += Math.cos(angle) * speed;
+          cartographic.latitude += Math.sin(angle) * speed;
+          engineSound.volume = 0.8;
+        }
+        if (keys.w) cartographic.height += 2;
+        if (keys.s) cartographic.height -= 2;
+      } else {
+        engineSound.volume = 1.0;
+      }
+      helicopterPosition = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, cartographic.height);
+      model.modelMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(helicopterPosition);
+      viewer.camera.setView({
+        destination: Cesium.Cartesian3.fromElements(helicopterPosition.x, helicopterPosition.y - 10, helicopterPosition.z + 50),
+        orientation: {
+          heading: 0,
+          pitch: Cesium.Math.toRadians([-20, -45, -90, 0][cameraMode]),
+          roll: 0
+        }
+      });
+    }
+    function checkCollision() {
+      const pos = Cesium.SceneTransforms.wgs84ToWindowCoordinates(scene, helicopterPosition);
+      if (!pos || gameOver) return;
+      const picks = scene.drillPick(pos);
+      for (const p of picks) {
+        if (p.primitive && p.primitive !== scene.globe) {
+          gameOver = true;
+          engineSound.pause();
+          clearInterval(movementInterval);
+          document.getElementById("lostMessage").style.display = "block";
+          return;
+        }
+      }
+    }
+    function restartGame() {
+      gameOver = false;
+      engineSound.play();
+      helicopterPosition = lastPositionBeforeCrash;
+      scene.primitives.removeAll();
+      Cesium.Model.fromGltfAsync({
+        url: 'assets/helicopter.glb',
+        modelMatrix: Cesium.Transforms.eastNorthUpToFixedFrame(helicopterPosition),
+        scale: 1.0
+      }).then(m => {
+        model = m;
+        scene.primitives.add(model);
+      });
+      movementInterval = setInterval(moveHelicopter, 50);
+      document.getElementById("lostMessage").style.display = "none";
+    }
+    movementInterval = setInterval(moveHelicopter, 50);
+    setInterval(checkCollision, 1000);
+  </script>
+</body>
+</html>
