@@ -101,7 +101,22 @@
     </div>
     <button id="cameraBtn">📷</button>
   </div>
-  <audio id="engineSound" src="assets/engine.mp3" autoplay loop></audio>
+  
+<script>
+fetch("assets/engine.mp3")
+  .then(res => res.arrayBuffer())
+  .then(buffer => {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx.decodeAudioData(buffer, decoded => {
+      const source = audioCtx.createBufferSource();
+      source.buffer = decoded;
+      source.loop = true;
+      source.connect(audioCtx.destination);
+      source.start(0);
+    });
+  });
+</script>
+
   <script>
     Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxNWQ5ZWYxMi0yNTViLTRhZmItYTg1Yi0wODVhYjJjZTY0ZGYiLCJpZCI6MzEzMTE4LCJpYXQiOjE3NTA3Njc5NTJ9.fIpEryemLcjeyKne7RDuei4AzyjhWxDmfLS1MEhTS6c';
     const viewer = new Cesium.Viewer('cesiumContainer', {
@@ -248,4 +263,5 @@
     setInterval(checkCollision, 1000);
   </script>
 </body>
-</html>
+  </html>
+  
