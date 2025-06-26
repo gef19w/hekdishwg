@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -101,37 +100,49 @@
     </div>
     <button id="cameraBtn">📷</button>
   </div>
-  
-<script>
-fetch("assets/engine.mp3")
-  .then(res => res.arrayBuffer())
-  .then(buffer => {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    audioCtx.decodeAudioData(buffer, decoded => {
-      const source = audioCtx.createBufferSource();
-      source.buffer = decoded;
-      source.loop = true;
-      source.connect(audioCtx.destination);
-      source.start(0);
-    });
-  });
-</script>
+
+  <!-- تشغيل الصوت -->
+  <script>
+    fetch("assets/engine.mp3")
+      .then(res => res.arrayBuffer())
+      .then(buffer => {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        audioCtx.decodeAudioData(buffer, decoded => {
+          const source = audioCtx.createBufferSource();
+          source.buffer = decoded;
+          source.loop = true;
+          source.connect(audioCtx.destination);
+          source.start(0);
+        });
+      });
+  </script>
 
   <script>
     Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxNWQ5ZWYxMi0yNTViLTRhZmItYTg1Yi0wODVhYjJjZTY0ZGYiLCJpZCI6MzEzMTE4LCJpYXQiOjE3NTA3Njc5NTJ9.fIpEryemLcjeyKne7RDuei4AzyjhWxDmfLS1MEhTS6c';
+
     const viewer = new Cesium.Viewer('cesiumContainer', {
       terrainProvider: Cesium.createWorldTerrain(),
+      imageryProvider: new Cesium.IonImageryProvider({ assetId: 2 }), // صور الخريطة
       shouldAnimate: true
     });
+
+    viewer.scene.globe.enableLighting = false;
+
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(2.3522, 48.8566, 300),
+      orientation: { heading: 0, pitch: Cesium.Math.toRadians(-30), roll: 0 }
+    });
+
     const scene = viewer.scene;
-    const engineSound = document.getElementById("engineSound");
     const deviceType = localStorage.getItem("selectedDevice");
     if (deviceType === 'mobile') {
       document.getElementById('mobileControls').style.display = 'block';
     }
+
     let helicopterPosition = Cesium.Cartesian3.fromDegrees(2.3522, 48.8566, 120);
     let model, movementInterval, lastPositionBeforeCrash = helicopterPosition;
     let gameOver = false, cameraMode = 0;
+
     Cesium.Model.fromGltfAsync({
       url: 'assets/helicopter.glb',
       modelMatrix: Cesium.Transforms.eastNorthUpToFixedFrame(helicopterPosition),
@@ -139,19 +150,18 @@ fetch("assets/engine.mp3")
     }).then(m => {
       model = m;
       scene.primitives.add(model);
-      viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(2.3522, 48.8566, 300),
-        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-30), roll: 0 }
-      });
     });
+
     let joystick = document.getElementById('joystick'), stick = document.getElementById('stick');
     let dx = 0, dy = 0, isTouching = false, centerX = 0, centerY = 0;
+
     joystick?.addEventListener('touchstart', e => {
       const rect = joystick.getBoundingClientRect();
       centerX = rect.left + rect.width / 2;
       centerY = rect.top + rect.height / 2;
       isTouching = true;
     });
+
     joystick?.addEventListener('touchmove', e => {
       if (!isTouching) return;
       const touch = e.touches[0];
@@ -162,12 +172,14 @@ fetch("assets/engine.mp3")
       stick.style.left = `${40 + dist * Math.cos(angle)}px`;
       stick.style.top = `${40 + dist * Math.sin(angle)}px`;
     });
+
     joystick?.addEventListener('touchend', () => {
       dx = 0; dy = 0;
       stick.style.left = '40px';
       stick.style.top = '40px';
       isTouching = false;
     });
+
     document.getElementById('upBtn')?.addEventListener('touchstart', () => {
       helicopterPosition = Cesium.Cartesian3.fromElements(helicopterPosition.x, helicopterPosition.y, helicopterPosition.z + 3);
     });
@@ -177,6 +189,7 @@ fetch("assets/engine.mp3")
     document.getElementById('cameraBtn')?.addEventListener('click', () => {
       cameraMode = (cameraMode + 1) % 4;
     });
+
     const keys = { arrowup: false, arrowdown: false, arrowleft: false, arrowright: false, w: false, s: false };
     document.addEventListener('keydown', e => {
       const k = e.key.toLowerCase();
@@ -187,11 +200,13 @@ fetch("assets/engine.mp3")
       const k = e.key.toLowerCase();
       if (keys.hasOwnProperty(k)) keys[k] = false;
     });
+
     function moveHelicopter() {
       if (gameOver || !model) return;
       lastPositionBeforeCrash = helicopterPosition;
       let speed = 0.0005;
       let cartographic = Cesium.Cartographic.fromCartesian(helicopterPosition);
+
       if (deviceType === 'mobile' && (dx || dy)) {
         const angle = Math.atan2(dy, dx);
         const magnitude = Math.min(Math.sqrt(dx*dx + dy*dy) / 40, 1);
@@ -208,18 +223,22 @@ fetch("assets/engine.mp3")
         else if (keys.arrowdown) angle = Math.PI;
         else if (keys.arrowleft) angle = Math.PI / 2;
         else if (keys.arrowright) angle = -Math.PI / 2;
+
         if (angle !== null) {
           cartographic.longitude += Math.cos(angle) * speed;
           cartographic.latitude += Math.sin(angle) * speed;
           engineSound.volume = 0.8;
         }
+
         if (keys.w) cartographic.height += 2;
         if (keys.s) cartographic.height -= 2;
       } else {
         engineSound.volume = 1.0;
       }
+
       helicopterPosition = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, cartographic.height);
       model.modelMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(helicopterPosition);
+
       viewer.camera.setView({
         destination: Cesium.Cartesian3.fromElements(helicopterPosition.x, helicopterPosition.y - 10, helicopterPosition.z + 50),
         orientation: {
@@ -229,6 +248,7 @@ fetch("assets/engine.mp3")
         }
       });
     }
+
     function checkCollision() {
       const pos = Cesium.SceneTransforms.wgs84ToWindowCoordinates(scene, helicopterPosition);
       if (!pos || gameOver) return;
@@ -243,6 +263,7 @@ fetch("assets/engine.mp3")
         }
       }
     }
+
     function restartGame() {
       gameOver = false;
       engineSound.play();
@@ -259,9 +280,9 @@ fetch("assets/engine.mp3")
       movementInterval = setInterval(moveHelicopter, 50);
       document.getElementById("lostMessage").style.display = "none";
     }
+
     movementInterval = setInterval(moveHelicopter, 50);
     setInterval(checkCollision, 1000);
   </script>
 </body>
-  </html>
-  
+</html>
